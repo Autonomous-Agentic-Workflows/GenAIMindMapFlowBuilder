@@ -1,0 +1,28 @@
+name: Router Structure Validation
+
+on:
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Validate router files exist
+      run: |
+        test -f backend/routers/flows.py && echo "✅ flows.py"
+        test -f backend/routers/qa.py && echo "✅ qa.py"
+        test -f backend/routers/ingestion.py && echo "✅ ingestion.py"
+        test -f backend/routers/sql.py && echo "✅ sql.py"
+        test -f backend/routers/nodes.py && echo "✅ nodes.py"
+    
+    - name: Verify app.py routers
+      run: |
+        grep -q "include_router(flows.router" backend/app.py && echo "✅ flows router registered"
+        grep -q "include_router(qa.router" backend/app.py && echo "✅ qa router registered"
+        grep -q "include_router(ingestion.router" backend/app.py && echo "✅ ingestion router registered"
+        grep -q "include_router(sql.router" backend/app.py && echo "✅ sql router registered"
+        grep -q "include_router(nodes.router" backend/app.py && echo "✅ nodes router registered"

@@ -1,0 +1,40 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements_minimal.txt
+        pip install pytest pytest-asyncio
+    
+    - name: Lint with pylint
+      run: |
+        pip install pylint
+        pylint backend/*.py backend/routers/*.py || true
+    
+    - name: Test routers
+      run: |
+        python -c "from backend.routers import flows, qa, ingestion, sql, nodes; print('✅ All routers imported successfully')"
