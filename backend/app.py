@@ -14,16 +14,19 @@ from neurite_client import NeuriteClient
 
 # Initialize Neurite client
 neurite = NeuriteClient()
+neurite_available = False  # Will be set in lifespan
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic"""
-    print("🚀 GenAI MindMap Flow Builder starting...")
-    print("📡 Neurite integration:", "ENABLED" if neurite.is_available() else "DISABLED (graceful fallback)")
-    print("📚 5 routers loaded (flows, qa, ingestion, sql, nodes)")
-    print("🔗 36 API routes registered")
+    global neurite_available
+    neurite_available = await neurite.is_available()
+    print(">> GenAI MindMap Flow Builder starting...")
+    print(">> Neurite integration:", "ENABLED" if neurite_available else "DISABLED (graceful fallback)")
+    print(">> 5 routers loaded (flows, qa, ingestion, sql, nodes)")
+    print(">> 36 API routes registered")
     yield
-    print("🛑 GenAI MindMap Flow Builder shutdown")
+    print(">> GenAI MindMap Flow Builder shutdown")
 
 # Create FastAPI app
 app = FastAPI(
@@ -59,7 +62,7 @@ async def root():
         "version": "1.0.0",
         "routers": ["flows", "qa", "ingestion", "sql", "nodes"],
         "routes": 36,
-        "neurite_status": "enabled" if neurite.is_available() else "disabled",
+        "neurite_status": "enabled" if neurite_available else "disabled",
         "docs": "/docs",
         "redoc": "/redoc"
     }
@@ -70,8 +73,8 @@ async def health():
     return {
         "status": "healthy",
         "neurite": {
-            "available": neurite.is_available(),
-            "endpoint": "http://localhost:18888" if neurite.is_available() else None
+            "available": neurite_available,
+            "endpoint": "http://localhost:18888" if neurite_available else None
         },
         "routers": {
             "flows": "active",
@@ -86,7 +89,7 @@ if __name__ == "__main__":
     print("\n" + "="*80)
     print("GenAI MindMap Flow Builder - Backend Server")
     print("="*80)
-    print("\n📖 Documentation:")
+    print("\nDocumentation:")
     print("   - Swagger UI: http://localhost:8000/docs")
     print("   - ReDoc: http://localhost:8000/redoc")
     print("   - Health: http://localhost:8000/health")
@@ -99,3 +102,4 @@ if __name__ == "__main__":
         reload=True,
         log_level="info"
     )
+
