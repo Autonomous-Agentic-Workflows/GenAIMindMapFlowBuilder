@@ -25,7 +25,7 @@ gh api repos/Autonomous-Agentic-Workflows/GenAIMindMapFlowBuilder/dispatches \
   -f 'client_payload[prompt]=Fix the failing backend-ci job on main'
 ```
 
-Requires the `ANTHROPIC_API_KEY` secret (repo or org level).
+Requires the `CLAUDE_CODE_OAUTH_TOKEN` secret (Claude Max OAuth; set at repo level).
 
 ## 2. Ollama dispatch (`.github/workflows/ollama.yml`) — local models, zero API cost
 
