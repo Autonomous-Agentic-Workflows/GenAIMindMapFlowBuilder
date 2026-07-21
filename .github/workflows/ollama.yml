@@ -1,0 +1,132 @@
+name: Ollama Dispatch
+
+# Local-LLM dispatch: runs on the self-hosted runner (genai-ollama-runner)
+# and talks to the Ollama daemon on that machine (localhost:11434).
+#  - Mention @ollama in an issue or PR comment
+#  - Manual: Actions -> Ollama Dispatch -> Run workflow (prompt + optional model)
+#  - Programmatic: repository_dispatch with event_type: ollama-task
+#    gh api repos/<owner>/<repo>/dispatches \
+#      -f event_type=ollama-task -f 'client_payload[prompt]=<task>'
+# Restricted to OWNER/MEMBER/COLLABORATOR authors (self-hosted runner safety).
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Task for the local model'
+        required: true
+        type: string
+      model:
+        description: 'Ollama model (blank = first available)'
+        required: false
+        type: string
+  repository_dispatch:
+    types: [ollama-task]
+
+jobs:
+  ollama:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'repository_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body, '@ollama') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'issues' &&
+        contains(github.event.issue.body, '@ollama') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
+    runs-on: [self-hosted, ollama]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      OLLAMA_MODELS: E:\ModelCache\ollama\models
+    steps:
+      - name: Resolve prompt
+        id: prompt
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let prompt = '';
+            if (context.eventName === 'workflow_dispatch') prompt = context.payload.inputs.prompt;
+            else if (context.eventName === 'repository_dispatch') prompt = context.payload.client_payload?.prompt ?? '';
+            else if (context.eventName === 'issue_comment') prompt = context.payload.comment.body;
+            else if (context.eventName === 'issues') prompt = `${context.payload.issue.title}\n\n${context.payload.issue.body ?? ''}`;
+            prompt = prompt.replace(/@ollama/gi, '').trim();
+            core.setOutput('prompt', prompt);
+            core.setOutput('model', context.payload.inputs?.model ?? context.payload.client_payload?.model ?? '');
+
+      - name: Ensure Ollama is up
+        shell: pwsh
+        run: |
+          try {
+            $v = (Invoke-RestMethod http://localhost:11434/api/version -TimeoutSec 5).version
+            Write-Host "Ollama daemon up: v$v"
+          } catch {
+            Write-Host "Daemon not responding - starting ollama serve"
+            Start-Process ollama -ArgumentList 'serve' -WindowStyle Hidden
+            $ok = $false
+            foreach ($i in 1..30) {
+              Start-Sleep 2
+              try { Invoke-RestMethod http://localhost:11434/api/version -TimeoutSec 3 | Out-Null; $ok = $true; break } catch {}
+            }
+            if (-not $ok) { throw 'Ollama daemon failed to start' }
+          }
+
+      - name: Resolve model
+        id: model
+        shell: pwsh
+        run: |
+          $requested = '${{ steps.prompt.outputs.model }}'
+          $tags = (Invoke-RestMethod http://localhost:11434/api/tags -TimeoutSec 15).models
+          $names = @($tags | ForEach-Object { $_.name })
+          Write-Host "Available: $($names -join ', ')"
+          $model = $null
+          if ($requested -and ($names -contains $requested)) { $model = $requested }
+          elseif ($requested) { ollama pull $requested; if ($LASTEXITCODE -eq 0) { $model = $requested } }
+          if (-not $model -and $names.Count -gt 0) { $model = $names[0] }
+          if (-not $model) {
+            Write-Host 'No models present - pulling qwen2.5-coder:1.5b'
+            ollama pull qwen2.5-coder:1.5b
+            if ($LASTEXITCODE -ne 0) { throw 'model pull failed' }
+            $model = 'qwen2.5-coder:1.5b'
+          }
+          Write-Host "Using model: $model"
+          "model=$model" >> $env:GITHUB_OUTPUT
+
+      - name: Generate
+        shell: pwsh
+        env:
+          TASK_PROMPT: ${{ steps.prompt.outputs.prompt }}
+        run: |
+          if (-not $env:TASK_PROMPT) { throw 'empty prompt' }
+          $body = @{ 
+            model  = '${{ steps.model.outputs.model }}'
+            stream = $false
+            messages = @(
+              @{ role = 'system'; content = 'You are a concise engineering assistant for the GenAIMindMapFlowBuilder repository (FastAPI backend, React/Vite frontend). Answer directly.' },
+              @{ role = 'user'; content = $env:TASK_PROMPT }
+            )
+          } | ConvertTo-Json -Depth 6
+          $r = Invoke-RestMethod http://localhost:11434/api/chat -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 1500
+          $out = $r.message.content
+          $out | Out-File response.md -Encoding utf8
+          "## Ollama (${{ steps.model.outputs.model }})`n`n$out" | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8
+
+      - name: Reply on issue/PR
+        if: github.event_name == 'issue_comment' || github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('response.md', 'utf8');
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.payload.issue.number,
+              body: `🦙 **Ollama** (\`${{ steps.model.outputs.model }}\`, local runner):\n\n${body}`
+            });

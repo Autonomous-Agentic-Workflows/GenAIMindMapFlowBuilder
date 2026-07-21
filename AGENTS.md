@@ -27,14 +27,33 @@ gh api repos/Autonomous-Agentic-Workflows/GenAIMindMapFlowBuilder/dispatches \
 
 Requires the `ANTHROPIC_API_KEY` secret (repo or org level).
 
-## 2. Copilot custom agents (`.github/agents/`)
+## 2. Ollama dispatch (`.github/workflows/ollama.yml`) — local models, zero API cost
+
+Runs on the self-hosted runner `genai-ollama-runner` (labels: `self-hosted, windows, ollama`) against the local Ollama daemon.
+
+| Channel | How |
+|---|---|
+| Mention | Comment `@ollama <task>` on an issue/PR (owners/members only) |
+| Manual | Actions → *Ollama Dispatch* → prompt + optional model |
+| API (for agents) | `repository_dispatch` with `event_type: ollama-task` |
+
+```bash
+gh api repos/Autonomous-Agentic-Workflows/GenAIMindMapFlowBuilder/dispatches \
+  -f event_type=ollama-task \
+  -f 'client_payload[prompt]=Summarize open TODOs in backend/routers' \
+  -f 'client_payload[model]=qwen2.5-coder:1.5b'
+```
+
+Model store: `E:\ModelCache\ollama\models` (gemma4, llama3.1, qwen2.5-coder). Falls back to pulling `qwen2.5-coder:1.5b` if none loaded. Replies are posted back as issue comments.
+
+## 3. Copilot custom agents (`.github/agents/`)
 
 - **cli-recovery-agent** — diagnose/fix CLI and system failures
 - **tech-translator** — explain concepts, errors, and next steps
 
 These are picked up automatically by Copilot CLI and coding agent sessions in this repo.
 
-## 3. Local agent fleet (Ollama, runs on the hub machine)
+## 4. Local agent fleet (Ollama, runs on the hub machine)
 
 Dispatched via `scripts/sub_agent_dispatcher.py` in the hub repo; escalates to cloud models only when local tiers can't handle the task.
 
@@ -47,7 +66,7 @@ Dispatched via `scripts/sub_agent_dispatcher.py` in the hub repo; escalates to c
 | `summarize-agent` | `qwen2.5-coder:1.5b` | Summarization & extraction |
 | `debug-agent` | `qwen2.5-coder:1.5b` | Error diagnosis & fix suggestions |
 
-Escalation chain: local fleet → `qwen2.5-coder:3b` → OpenRouter (free) → Together.AI → native APIs (Claude/Copilot/Gemini/Codex). Local agents hand work to this repo through the `claude-task` dispatch above or by opening issues mentioning `@claude`.
+Escalation chain: local fleet → `qwen2.5-coder:3b` → OpenRouter (free) → Together.AI → native APIs (Claude/Copilot/Gemini/Codex). Local agents hand work to this repo through the `claude-task` / `ollama-task` dispatches above or by opening issues mentioning `@claude` / `@ollama`.
 
 ## Conventions for all agents
 
