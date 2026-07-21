@@ -6,7 +6,7 @@ name: Claude Dispatch
 #  - Trigger programmatically from local agents via repository_dispatch (event_type: claude-task)
 #    gh api repos/${{ github.repository }}/dispatches \
 #      -f event_type=claude-task -f 'client_payload[prompt]=<task>'
-# Requires repo/org secret: ANTHROPIC_API_KEY
+# Requires repo/org secret: CLAUDE_CODE_OAUTH_TOKEN (Claude Max subscription OAuth)
 
 on:
   issue_comment:
@@ -51,7 +51,7 @@ jobs:
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: >-
             ${{ github.event_name == 'workflow_dispatch' && inputs.prompt ||
