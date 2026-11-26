@@ -172,6 +172,10 @@ All GitHub Actions workflows configured for automated deployment on push. See `.
 
 MIT
 
+## Credits
+
+Development: Conor Gomes
+
 ## Contact
 
 For issues or questions, contact the development team.
