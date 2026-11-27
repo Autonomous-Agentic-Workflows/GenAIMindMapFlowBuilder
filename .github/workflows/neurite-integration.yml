@@ -29,4 +29,4 @@ jobs:
     
     - name: Verify all routers
       run: |
-        python -c "from backend import app; print('✅ FastAPI app initialized')"
+        PYTHONPATH=backend python -c "import app; print('✅ FastAPI app initialized')"
