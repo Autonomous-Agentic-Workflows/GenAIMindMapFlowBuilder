@@ -1,187 +1,97 @@
 # GenAI MindMap Flow Builder
 
-Modular FastAPI backend for AI-powered mind mapping with Neurite integration, document ingestion, QA/chat functionality, and data persistence.
+A FastAPI backend and a React + Vite frontend for AI-assisted mind maps and flows. The backend is split into routers for flows, Q&A, document ingestion, SQL, and nodes. It can optionally talk to a local Neurite service, and it starts even when Neurite is not running.
 
-## Architecture
+## Quick start
 
-Backend refactored from monolithic `app.py` into 5 modular FastAPI routers:
-
-### Routers
-
-1. **flows.py** (6 routes) - Flow CRUD operations
-   - `POST /flows` - Create flow
-   - `GET /flows` - List flows
-   - `GET /flows/{id}` - Get flow details
-   - `PUT /flows/{id}` - Update flow
-   - `DELETE /flows/{id}` - Delete flow
-   - `GET /flows/{id}/nodes` - Get flow nodes
-
-2. **qa.py** (15 routes) - QA/chat and conversation management
-   - Chat endpoints with streaming support
-   - Question-answering operations
-   - Conversation history management
-   - Context awareness
-
-3. **ingestion.py** (12 routes) - Document ingestion and processing
-   - PDF/document upload
-   - Text extraction
-   - Chunking and embedding
-   - Indexing operations
-
-4. **sql.py** (2 routes) - Database operations
-   - Query execution
-   - Schema inspection
-
-5. **nodes.py** (1 route) - Mind map node management
-   - Node CRUD
-
-### Features
-
-- **Dependency Injection**: All routers use FastAPI's dependency injection pattern for configuration and authentication
-- **Neurite Integration**: Bi-directional communication with Neurite system via `neurite_client.py`
-- **Graceful Fallback**: Backend operates independently if Neurite unavailable
-- **SQLAlchemy v1.4.50**: Resolved dependency conflicts with compatible version
-- **36 Total API Routes**: Comprehensive endpoint coverage
-- **CI/CD Ready**: 4 GitHub Actions workflows for automated testing and deployment
-
-## Project Structure
-
-```
-backend/
-├── app.py                 # Main FastAPI app with router registration
-├── neurite_client.py      # Neurite integration bridge
-├── requirements_minimal.txt
-├── requirements_core.txt
-├── routers/
-│   ├── flows.py          # Flow CRUD endpoints
-│   ├── qa.py             # QA/chat endpoints
-│   ├── ingestion.py      # Document ingestion
-│   ├── sql.py            # Database operations
-│   └── nodes.py          # Node management
-└── ...
-
-.github/
-├── workflows/
-│   ├── neurite-integration.yml    # Full integration testing
-│   ├── backend-ci.yml            # Python 3.10-3.12 matrix
-│   ├── frontend-ci.yml           # Node 18-20 matrix
-│   └── pr-checks.yml             # Router validation
-└── ...
-```
-
-## Installation
-
-```bash
-# Using minimal requirements (16 packages)
-pip install -r backend/requirements_minimal.txt
-
-# Or fallback requirements (6 packages)
-pip install -r backend/requirements_core.txt
-```
-
-## Running the Backend
+### Backend
 
 ```bash
 cd backend
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements_minimal.txt
 python app.py
 ```
 
-Server starts at `http://localhost:8000`
+The API listens on `http://localhost:8000` (all interfaces in `app.py`). Interactive docs:
 
-## API Documentation
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+- Health: http://localhost:8000/health
 
-FastAPI automatically generates API docs at:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
-## Neurite Integration
-
-The backend integrates with Neurite via `neurite_client.py`:
-
-```python
-from backend.neurite_client import NeuriteClient
-
-neurite = NeuriteClient()
-
-# Check if Neurite is available
-if neurite.is_available():
-    # Forward request to Neurite
-    result = neurite.forward_request("flow_analysis", data)
-    
-    # Sync system map
-    neurite.update_system_map({"type": "flow_created", "id": flow_id})
-```
-
-Features:
-- Automatic health checks via `is_available()`
-- Request proxying through AI Proxy
-- System map synchronization
-- Graceful fallback when unavailable
-
-## GitHub Actions CI/CD
-
-4 automated workflows on push:
-
-1. **neurite-integration.yml** - Full integration testing
-2. **backend-ci.yml** - Python 3.10-3.12 tests
-3. **frontend-ci.yml** - Node.js 18-20 tests
-4. **pr-checks.yml** - Router structure validation
-
-All workflows execute in parallel and must pass for merge.
-
-## Documentation
-
-- **COMPLETE_INTEGRATION_GUIDE.md** - Step-by-step setup
-- **GENAI_GIT_WORKFLOW.md** - Git workflow integration
-- **UNIFIED_AGENT_CONTEXT.md** - Agent coordination system
-- **NEURITE_INTEGRATION.md** - Detailed Neurite setup
-
-## Technology Stack
-
-- **Framework**: FastAPI
-- **ORM**: SQLAlchemy 1.4.50
-- **API Server**: Uvicorn
-- **Async**: asyncio
-- **Validation**: Pydantic
-- **Testing**: pytest
-
-## Development
-
-### Adding a New Route
-
-1. Create endpoint in appropriate router (`routers/flows.py`, etc.)
-2. Use FastAPI decorator (`@router.post()`, etc.)
-3. Route automatically included via `include_router()` in `app.py`
-4. Document in README
-
-### Testing Routes Locally
+### Frontend
 
 ```bash
-# Run app with reload
-python app.py
-
-# Test endpoint
-curl http://localhost:8000/flows
+cd frontend
+npm install
+npm run dev
 ```
 
-## Deployment
+The Vite app is documented as listening on http://localhost:5173 and proxying `/api` to the backend on port 8000. See [frontend/README.md](frontend/README.md).
 
-All GitHub Actions workflows configured for automated deployment on push. See `.github/workflows/` for details.
+## Configuration
+
+There is no `.env.example` in this repository. `python-dotenv` is listed in `backend/requirements_minimal.txt`, but `backend/neurite_client.py` currently defaults to `http://localhost:18888` in code rather than reading an environment variable. If you run Neurite elsewhere, you would need to change that client or add configuration — this docs pass does not invent an undocumented env var.
+
+CORS on the backend is currently open (`allow_origins=["*"]`). Do not expose it on a public network as-is.
+
+## API overview
+
+Routers are registered in `backend/app.py`:
+
+| Prefix | Module | Role |
+| --- | --- | --- |
+| `/flows` | `backend/routers/flows.py` | Flow CRUD and flow nodes |
+| `/qa` | `backend/routers/qa.py` | Q&A and conversations |
+| `/ingestion` | `backend/routers/ingestion.py` | Document upload and processing |
+| `/sql` | `backend/routers/sql.py` | Query and schema helpers |
+| `/nodes` | `backend/routers/nodes.py` | Mind-map node operations |
+| `/` and `/health` | `backend/app.py` | Status and health |
+
+The app and frontend comments describe 36 API routes in total. Use `/docs` as the live list; it is the source of truth if a README count drifts.
+
+Neurite integration (`backend/neurite_client.py`):
+
+- `is_available()` checks `GET {base}/status`
+- `forward_request(endpoint, data)` posts to Neurite
+- `update_system_map(event)` posts to `/system-map/update`
+
+If Neurite is down, those calls return `None` / `False` and the backend still serves its own routes.
+
+## Project layout
+
+```
+backend/
+  app.py
+  neurite_client.py
+  requirements_minimal.txt
+  routers/           flows, qa, ingestion, sql, nodes
+frontend/
+  README.md
+  package.json       scripts: dev, build, preview
+  src/               React app, API client, components
+.github/workflows/   CI workflows (backend, frontend, PR checks, Neurite integration)
+AGENTS.md            Notes for coding agents
+```
+
+Note: an older root README mentioned `requirements_core.txt` and several root markdown guides (`COMPLETE_INTEGRATION_GUIDE.md`, `GENAI_GIT_WORKFLOW.md`, `UNIFIED_AGENT_CONTEXT.md`, `NEURITE_INTEGRATION.md`). Those files are **not** in the current tree. Use this README, `frontend/README.md`, and `AGENTS.md` instead.
+
+## Contributing and testing
+
+```bash
+# backend
+cd backend && pip install -r requirements_minimal.txt
+python app.py
+
+# frontend
+cd frontend && npm install && npm run build
+```
+
+GitHub Actions workflows under `.github/workflows/` run backend and frontend CI and PR checks. There is no root `pytest` suite checked in next to `app.py` in this pass.
+
+Open a pull request against `main`. Do not commit secrets or virtualenvs.
 
 ## License
 
-MIT
-
-## Contact
-
-For issues or questions, contact the development team.
-
----
-
-**Total Deliverables**:
-- 5 modular routers
-- 36 API routes
-- 4 CI/CD workflows
-- Neurite integration
-- Comprehensive documentation
-- Automated deployment
+MIT — see [LICENSE](LICENSE).
